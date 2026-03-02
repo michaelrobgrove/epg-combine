@@ -1,6 +1,15 @@
 # Cloudflare Pages configuration
 name = "epg-combine"
-compatibility_date = "2024-01-01"
+main = "./dist/index.js"
+compatibility_date = "2026-03-01"
+
+[env.production]
+name = "epg-combine"
+route = "epg-combine.pages.dev/*"
+compatibility_date = "2026-03-01"
+
+[triggers]
+crons = ["0 * * * *"] # Runs every hour
 
 # Build settings
 [build]
