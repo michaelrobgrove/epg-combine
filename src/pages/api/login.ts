@@ -1,13 +1,10 @@
 import { authManager } from '../../lib/auth';
 
-interface RequestBody {
-  username: string;
-  password: string;
-}
-
 export async function POST({ request }: { request: Request }) {
   try {
-    const { username, password }: RequestBody = await request.json();
+    const formData = await request.formData();
+    const username = formData.get('username') as string;
+    const password = formData.get('password') as string;
     
     if (!username || !password) {
       return new Response(
