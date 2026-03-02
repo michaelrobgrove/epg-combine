@@ -37,6 +37,10 @@ const session = Astro.locals.session!;
         </div>
         
         <div id="epg-status" class="status-message"></div>
+        <div id="epg-errors" class="error-details" style="display:none;">
+          <h4>Error Details</h4>
+          <ul id="epg-error-list"></ul>
+        </div>
       </section>
 
       <section class="stats-section">
@@ -198,9 +202,10 @@ const session = Astro.locals.session!;
             ? new Date(data.lastUpdated).toLocaleString()
             : "-";
           errorCountEl.textContent = data.errors ? data.errors.length : 0;
+          showErrors(data.errors || []);
 
           const errMsg = data.errors && data.errors.length > 0
-            ? ` (${data.errors.length} error(s))`
+            ? ` (${data.errors.length} error(s) — see details below)`
             : "";
           showStatus(
             `EPG refresh completed: ${data.channelCount} channels, ${data.programCount} programs loaded.${errMsg}`,
@@ -273,6 +278,17 @@ const session = Astro.locals.session!;
       `).join("");
 
       searchResults.innerHTML = resultsHtml;
+    }
+
+    function showErrors(errors) {
+      const container = document.getElementById("epg-errors");
+      const list = document.getElementById("epg-error-list");
+      if (!errors || errors.length === 0) {
+        container.style.display = "none";
+        return;
+      }
+      list.innerHTML = errors.map(e => `<li><code>${e}</code></li>`).join("");
+      container.style.display = "block";
     }
 
     function showStatus(message, type = "info") {
@@ -456,6 +472,35 @@ const session = Astro.locals.session!;
       background-color: #dbeafe;
       color: #1e40af;
       border: 1px solid #bfdbfe;
+    }
+
+    .error-details {
+      margin-top: 1rem;
+      padding: 1rem;
+      background-color: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 4px;
+    }
+
+    .error-details h4 {
+      margin: 0 0 0.5rem 0;
+      color: #9a3412;
+      font-size: 0.875rem;
+    }
+
+    .error-details ul {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    .error-details li {
+      margin-bottom: 0.25rem;
+      font-size: 0.8rem;
+      color: #7c2d12;
+    }
+
+    .error-details code {
+      word-break: break-all;
     }
 
     .stats-grid {

@@ -84,24 +84,77 @@ function parsePrograms(doc: Document): Program[] {
   return programs;
 }
 
+async function decompressGzip(response: Response): Promise<string> {
+  const buffer = await response.arrayBuffer();
+  // DecompressionStream is available in CF Workers
+  const ds = new DecompressionStream('gzip');
+  const writer = ds.writable.getWriter();
+  const reader = ds.readable.getReader();
+
+  writer.write(buffer);
+  writer.close();
+
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+
+  const total = chunks.reduce((acc, c) => acc + c.length, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder('utf-8').decode(merged);
+}
+
 export class EPGParser {
   async parseEPG(url: string): Promise<EPGData> {
-    const response = await fetch(url, {
-      headers: { 'Accept-Encoding': 'gzip, deflate, br' },
-      // CF Workers automatically decompresses gzip/br responses
-    });
+    // Fetch without Accept-Encoding so CF doesn't auto-decompress
+    // (we handle .gz manually so we know what we got)
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} fetching ${url}`);
     }
 
-    const text = await response.text();
+    const contentType = response.headers.get('content-type') ?? '';
+    const isGzip =
+      url.toLowerCase().endsWith('.gz') ||
+      contentType.includes('gzip') ||
+      contentType.includes('x-gzip');
+
+    let text: string;
+    if (isGzip) {
+      text = await decompressGzip(response);
+    } else {
+      text = await response.text();
+    }
+
+    if (!text.trim().startsWith('<')) {
+      throw new Error(`Response from ${url} does not appear to be XML`);
+    }
+
     // Use the globally available DOMParser in CF Workers
     const doc = new DOMParser().parseFromString(text, 'text/xml');
 
+    const channels = parseChannels(doc);
+    const programs = parsePrograms(doc);
+
+    if (channels.length === 0 && programs.length === 0) {
+      // Check for parse errors in the document
+      const parseError = doc.getElementsByTagName('parsererror')[0];
+      if (parseError) {
+        throw new Error(`XML parse error in ${url}: ${parseError.textContent?.slice(0, 200)}`);
+      }
+    }
+
     return {
-      channels: parseChannels(doc),
-      programs: parsePrograms(doc),
+      channels,
+      programs,
       source: url,
       lastUpdated: new Date(),
     };
