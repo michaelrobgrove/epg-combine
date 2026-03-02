@@ -1,11 +1,7 @@
-import { authManager } from '../../lib/auth';
-
-// Mock channel data - in a real implementation, this would come from D1 database
 interface MockChannel {
   id: string;
   displayName: string;
   icon?: string;
-  url?: string;
 }
 
 const mockChannels: MockChannel[] = [
@@ -18,50 +14,27 @@ const mockChannels: MockChannel[] = [
   { id: 'hbo.us', displayName: 'HBO', icon: 'https://example.com/hbo.png' },
   { id: 'discovery.us', displayName: 'Discovery Channel', icon: 'https://example.com/discovery.png' },
   { id: 'history.us', displayName: 'History Channel', icon: 'https://example.com/history.png' },
-  { id: 'espn.us', displayName: 'ESPN', icon: 'https://example.com/espn.png' }
+  { id: 'espn.us', displayName: 'ESPN', icon: 'https://example.com/espn.png' },
 ];
 
-export async function GET({ url, cookies }: { url: URL; cookies: any }) {
-  const sessionId = cookies.get('session_id');
-  
-  if (!sessionId) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
+export async function GET({ url }: { url: URL }) {
+  const query = new URL(url.toString()).searchParams.get('q') || '';
 
-  const session = authManager.getSession(sessionId);
-  
-  if (!session) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const searchParams = new URL(url.toString()).searchParams;
-  const query = searchParams.get('q') || '';
-  
   if (!query) {
-    return new Response(
-      JSON.stringify({ error: 'Search query is required' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ error: 'Search query is required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
-  // Simple search implementation
-  const results = mockChannels.filter(channel => 
-    channel.id.toLowerCase().includes(query.toLowerCase()) ||
-    channel.displayName.toLowerCase().includes(query.toLowerCase())
+  const results = mockChannels.filter(
+    ch =>
+      ch.id.toLowerCase().includes(query.toLowerCase()) ||
+      ch.displayName.toLowerCase().includes(query.toLowerCase())
   );
 
   return new Response(
-    JSON.stringify({ 
-      results: results.slice(0, 20), // Limit results
-      total: results.length,
-      query
-    }),
+    JSON.stringify({ results: results.slice(0, 20), total: results.length, query }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   );
 }

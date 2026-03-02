@@ -1,65 +1,26 @@
-import { authManager } from '../../lib/auth';
-
 interface EPGConfig {
   urls: string[];
   lastUpdated?: Date;
 }
 
+// NOTE: In Cloudflare Workers (stateless), this resets on every cold start.
+// For persistence, migrate to KV storage.
 let epgConfig: EPGConfig = {
   urls: [],
-  lastUpdated: new Date()
+  lastUpdated: new Date(),
 };
 
-export async function GET({ cookies }: { cookies: any }) {
-  const sessionId = cookies.get('session_id');
-  
-  if (!sessionId) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const session = authManager.getSession(sessionId);
-  
-  if (!session) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
+export async function GET() {
   return new Response(
-    JSON.stringify({
-      urls: epgConfig.urls,
-      lastUpdated: epgConfig.lastUpdated
-    }),
+    JSON.stringify({ urls: epgConfig.urls, lastUpdated: epgConfig.lastUpdated }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   );
 }
 
-export async function POST({ request, cookies }: { request: Request; cookies: any }) {
-  const sessionId = cookies.get('session_id');
-  
-  if (!sessionId) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const session = authManager.getSession(sessionId);
-  
-  if (!session) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
+export async function POST({ request }: { request: Request }) {
   try {
     const { urls } = await request.json();
-    
+
     if (!Array.isArray(urls)) {
       return new Response(
         JSON.stringify({ error: 'Invalid request format' }),
@@ -67,14 +28,13 @@ export async function POST({ request, cookies }: { request: Request; cookies: an
       );
     }
 
-    // Validate URLs
     const validUrls: string[] = [];
     for (const url of urls) {
       try {
         new URL(url);
         validUrls.push(url.trim());
-      } catch (error) {
-        // Skip invalid URLs
+      } catch {
+        // skip invalid URLs
       }
     }
 
@@ -82,11 +42,11 @@ export async function POST({ request, cookies }: { request: Request; cookies: an
     epgConfig.lastUpdated = new Date();
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         message: 'EPG URLs updated successfully',
         urls: epgConfig.urls,
-        lastUpdated: epgConfig.lastUpdated
+        lastUpdated: epgConfig.lastUpdated,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
@@ -99,34 +59,16 @@ export async function POST({ request, cookies }: { request: Request; cookies: an
   }
 }
 
-export async function DELETE({ cookies }: { cookies: any }) {
-  const sessionId = cookies.get('session_id');
-  
-  if (!sessionId) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const session = authManager.getSession(sessionId);
-  
-  if (!session) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
+export async function DELETE() {
   epgConfig.urls = [];
   epgConfig.lastUpdated = new Date();
 
   return new Response(
-    JSON.stringify({ 
-      success: true, 
+    JSON.stringify({
+      success: true,
       message: 'All EPG URLs cleared successfully',
       urls: epgConfig.urls,
-      lastUpdated: epgConfig.lastUpdated
+      lastUpdated: epgConfig.lastUpdated,
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   );

@@ -1,11 +1,9 @@
 /// <reference types="astro/client" />
 
-// Environment variable types
 interface ImportMetaEnv {
-  readonly ADMIN_USERNAME: string;
-  readonly ADMIN_PASSWORD: string;
-  readonly KV_NAMESPACE?: string;
-  readonly D1_DATABASE?: string;
+  readonly ADMIN_USERNAME?: string;
+  readonly ADMIN_PASSWORD?: string;
+  readonly SESSION_SECRET?: string;
 }
 
 interface ImportMeta {
@@ -13,12 +11,18 @@ interface ImportMeta {
 }
 
 declare namespace App {
-  interface Locals extends astroHTML.Locals {
+  interface Locals {
     runtime: {
       env: {
-        ADMIN_USERNAME: string;
-        ADMIN_PASSWORD: string;
+        ADMIN_USERNAME?: string;
+        ADMIN_PASSWORD?: string;
+        SESSION_SECRET?: string;
+        [key: string]: string | undefined;
       };
+    };
+    session?: {
+      username: string;
+      expiresAt: number;
     };
   }
 }

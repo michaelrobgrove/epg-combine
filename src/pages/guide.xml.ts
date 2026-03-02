@@ -1,5 +1,3 @@
-import { authManager } from '../lib/auth';
-
 // Mock combined EPG data - in a real implementation, this would come from KV/D1 storage
 interface MockEPGData {
   channels: Array<{

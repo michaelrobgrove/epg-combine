@@ -1,5 +1,5 @@
 import { defineMiddleware } from 'astro:middleware';
-import { authManager } from './lib/auth';
+import { verifyToken, getSessionSecret, SESSION_COOKIE } from './lib/auth';
 
 const protectedApiRoutes = [
   '/api/epg-list',
@@ -12,39 +12,48 @@ const protectedApiRoutes = [
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const url = context.url;
+  const env = context.locals.runtime?.env ?? {};
+  const secret = getSessionSecret(env);
 
   // Protect API routes
   if (protectedApiRoutes.some(route => url.pathname.startsWith(route))) {
-    const sessionId = context.cookies.get('session_id')?.value;
-    if (!sessionId) {
-      return new Response('Unauthorized', { status: 401 });
+    const token = context.cookies.get(SESSION_COOKIE)?.value;
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    const session = authManager.getSession(sessionId);
+    const session = await verifyToken(token, secret);
     if (!session) {
-      // Clear the invalid cookie
-      context.cookies.delete('session_id', { path: '/' });
-      return new Response('Unauthorized', { status: 401 });
+      context.cookies.delete(SESSION_COOKIE, { path: '/' });
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    // Session is valid, proceed
+    // Attach session to locals for downstream use
+    context.locals.session = session;
     return next();
   }
-  
+
   // Protect the dashboard page itself
   if (url.pathname === '/dashboard') {
-    const sessionId = context.cookies.get('session_id')?.value;
-    if (!sessionId) {
+    const token = context.cookies.get(SESSION_COOKIE)?.value;
+    if (!token) {
       return context.redirect('/');
     }
 
-    const session = authManager.getSession(sessionId);
+    const session = await verifyToken(token, secret);
     if (!session) {
-      context.cookies.delete('session_id', { path: '/' });
+      context.cookies.delete(SESSION_COOKIE, { path: '/' });
       return context.redirect('/');
     }
+
+    context.locals.session = session;
   }
 
-  // For all other requests, continue
   return next();
 });

@@ -1,16 +1,7 @@
----import { authManager } from '../lib/auth';
-
-const sessionId = Astro.cookies.get('session_id')?.value;
-
-if (!sessionId) {
-  return Astro.redirect('/?error=Please login first');
-}
-
-const session = authManager.getSession(sessionId);
-
-if (!session) {
-  return Astro.redirect('/?error=Session expired');
-}
+---
+// Auth is handled by middleware — session is already validated.
+// If we reach here, Astro.locals.session is guaranteed to exist.
+const session = Astro.locals.session!;
 ---
 
 <!DOCTYPE html>

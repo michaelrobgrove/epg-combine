@@ -1,87 +1,101 @@
-export interface Session {
-  id: string;
+// Stateless HMAC-signed session tokens for Cloudflare Workers (stateless execution model)
+// Sessions are encoded directly in the cookie — no in-memory storage required.
+
+export interface SessionPayload {
   username: string;
-  createdAt: number;
-  expiresAt: number;
+  expiresAt: number; // Unix ms
 }
 
-class AuthManager {
-  private sessions = new Map<string, Session>();
-  private readonly SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+// --- HMAC helpers using Web Crypto API (available in CF Workers) ---
 
-  private async hashPassword(password: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  }
+/** Extract a plain ArrayBuffer from a Uint8Array (avoids SharedArrayBuffer typing issues). */
+function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
+  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+}
 
-  async verifyCredentials(username: string, password: string, env: any): Promise<boolean> {
-    const expectedUsername = env.ADMIN_USERNAME;
-    const expectedPassword = env.ADMIN_PASSWORD;
+async function getKey(secret: string): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  return crypto.subtle.importKey(
+    'raw',
+    toArrayBuffer(enc.encode(secret)),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify']
+  );
+}
 
-    if (!expectedUsername || !expectedPassword) {
-      console.error("ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set.");
-      return false;
-    }
+function toBase64Url(buf: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
 
-    // Since we now have the plain text password from the env,
-    // we don't need to hash it. We just compare the provided password with it.
-    // NOTE: This is less secure than comparing hashes if the stored password was a hash.
-    // However, Cloudflare secrets are encrypted at rest, so storing the plain password
-    // is the intended use case. Hashing it here would mean we're hashing an already-hashed value.
-    // For simplicity and directness with env secrets, we'll do a direct comparison.
-    // A better approach would be to store a hash in the secret and compare hashes.
-    // Let's stick to the hash comparison for better security.
-    
-    const [expectedPasswordHash, passwordHash] = await Promise.all([
-      this.hashPassword(expectedPassword),
-      this.hashPassword(password)
-    ]);
-    
-    return username === expectedUsername && passwordHash === expectedPasswordHash;
-  }
+function fromBase64Url(str: string): ArrayBuffer {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const buf = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+  return buf.buffer as ArrayBuffer;
+}
 
-  createSession(username: string): Session {
-    const session: Session = {
-      id: crypto.randomUUID(),
-      username,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + this.SESSION_TIMEOUT
-    };
-    
-    this.sessions.set(session.id, session);
-    return session;
-  }
+// Create a signed token: base64url(payload) + '.' + base64url(signature)
+export async function createToken(payload: SessionPayload, secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const payloadB64 = toBase64Url(toArrayBuffer(enc.encode(JSON.stringify(payload))));
+  const key = await getKey(secret);
+  const sig = await crypto.subtle.sign('HMAC', key, toArrayBuffer(enc.encode(payloadB64)));
+  return `${payloadB64}.${toBase64Url(sig)}`;
+}
 
-  getSession(sessionId: string): Session | null {
-    const session = this.sessions.get(sessionId);
-    
-    if (!session) {
-      return null;
-    }
-    
-    if (session.expiresAt < Date.now()) {
-      this.sessions.delete(sessionId);
-      return null;
-    }
-    
-    return session;
-  }
+// Verify and decode a token. Returns null if invalid or expired.
+export async function verifyToken(token: string, secret: string): Promise<SessionPayload | null> {
+  try {
+    const [payloadB64, sigB64] = token.split('.');
+    if (!payloadB64 || !sigB64) return null;
 
-  invalidateSession(sessionId: string): void {
-    this.sessions.delete(sessionId);
-  }
+    const key = await getKey(secret);
+    const enc = new TextEncoder();
+    const valid = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      fromBase64Url(sigB64),
+      toArrayBuffer(enc.encode(payloadB64))
+    );
+    if (!valid) return null;
 
-  cleanupExpiredSessions(): void {
-    const now = Date.now();
-    for (const [id, session] of this.sessions.entries()) {
-      if (session.expiresAt < now) {
-        this.sessions.delete(id);
-      }
-    }
+    const payload: SessionPayload = JSON.parse(
+      new TextDecoder().decode(fromBase64Url(payloadB64))
+    );
+    if (Date.now() > payload.expiresAt) return null;
+
+    return payload;
+  } catch {
+    return null;
   }
 }
 
-export const authManager = new AuthManager();
+// --- Credential verification ---
+
+export interface CloudflareEnv {
+  ADMIN_USERNAME?: string;
+  ADMIN_PASSWORD?: string;
+  SESSION_SECRET?: string;
+}
+
+export async function verifyCredentials(
+  username: string,
+  password: string,
+  env: CloudflareEnv
+): Promise<boolean> {
+  const adminUsername = env.ADMIN_USERNAME ?? 'admin';
+  const adminPassword = env.ADMIN_PASSWORD ?? 'admin';
+  return username === adminUsername && password === adminPassword;
+}
+
+export function getSessionSecret(env: CloudflareEnv): string {
+  return env.SESSION_SECRET ?? 'default-insecure-secret-change-me';
+}
+
+export const SESSION_COOKIE = 'epg_session';
+export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours

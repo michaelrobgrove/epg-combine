@@ -1,12 +1,12 @@
 import type { APIContext } from 'astro';
-import { authManager } from '../../lib/auth';
+import { verifyCredentials, createToken, getSessionSecret, SESSION_COOKIE, SESSION_DURATION_MS } from '../../lib/auth';
 
 export async function POST(context: APIContext) {
   try {
     const formData = await context.request.formData();
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
-    
+
     if (!username || !password) {
       return new Response(
         JSON.stringify({ error: 'Username and password are required' }),
@@ -14,8 +14,9 @@ export async function POST(context: APIContext) {
       );
     }
 
-    const isValid = await authManager.verifyCredentials(username, password, context.locals.runtime.env);
-    
+    const env = context.locals.runtime.env;
+    const isValid = await verifyCredentials(username, password, env);
+
     if (!isValid) {
       return new Response(
         JSON.stringify({ error: 'Invalid credentials' }),
@@ -23,21 +24,22 @@ export async function POST(context: APIContext) {
       );
     }
 
-    const session = authManager.createSession(username);
-    
-    // Set HTTP-only cookie
-    const response = new Response(
+    const secret = getSessionSecret(env);
+    const token = await createToken(
+      { username, expiresAt: Date.now() + SESSION_DURATION_MS },
+      secret
+    );
+
+    return new Response(
       JSON.stringify({ success: true, message: 'Login successful' }),
-      { 
-        status: 200, 
-        headers: { 
+      {
+        status: 200,
+        headers: {
           'Content-Type': 'application/json',
-          'Set-Cookie': `session_id=${session.id}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}; SameSite=Strict`
-        }
+          'Set-Cookie': `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${SESSION_DURATION_MS / 1000}; SameSite=Lax; Secure`,
+        },
       }
     );
-    
-    return response;
   } catch (error) {
     console.error('Login error:', error);
     return new Response(
@@ -47,52 +49,15 @@ export async function POST(context: APIContext) {
   }
 }
 
-export async function GET({ cookies }: { cookies: any }) {
-  const sessionId = cookies.get('session_id');
-  
-  if (!sessionId) {
-    return new Response(
-      JSON.stringify({ authenticated: false }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const session = authManager.getSession(sessionId);
-  
-  if (!session) {
-    return new Response(
-      JSON.stringify({ authenticated: false }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
+export async function DELETE(context: APIContext) {
   return new Response(
-    JSON.stringify({ 
-      authenticated: true, 
-      username: session.username,
-      expiresAt: session.expiresAt 
-    }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-export async function DELETE({ cookies }: { cookies: any }) {
-  const sessionId = cookies.get('session_id');
-  
-  if (sessionId) {
-    authManager.invalidateSession(sessionId);
-  }
-  
-  const response = new Response(
     JSON.stringify({ success: true, message: 'Logged out successfully' }),
-    { 
-      status: 200, 
-      headers: { 
+    {
+      status: 200,
+      headers: {
         'Content-Type': 'application/json',
-        'Set-Cookie': `session_id=; HttpOnly; Path=/; Max-Age=0; SameSite=Strict`
-      }
+        'Set-Cookie': `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`,
+      },
     }
   );
-  
-  return response;
 }
