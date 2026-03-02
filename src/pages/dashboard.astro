@@ -1,5 +1,4 @@
----
-import { authManager } from '../lib/auth';
+---import { authManager } from '../lib/auth';
 
 const sessionId = Astro.cookies.get('session_id')?.value;
 
@@ -84,115 +83,124 @@ if (!session) {
 
   <script type="module">
     // Dashboard JavaScript functionality
-    const epgUrlsTextarea = document.getElementById('epg-urls');
-    const saveUrlsBtn = document.getElementById('save-urls-btn');
-    const clearUrlsBtn = document.getElementById('clear-urls-btn');
-    const refreshBtn = document.getElementById('refresh-btn');
-    const epgStatus = document.getElementById('epg-status');
-    const logoutBtn = document.getElementById('logout-btn');
+    const epgUrlsTextarea = document.getElementById("epg-urls");
+    const saveUrlsBtn = document.getElementById("save-urls-btn");
+    const clearUrlsBtn = document.getElementById("clear-urls-btn");
+    const refreshBtn = document.getElementById("refresh-btn");
+    const epgStatus = document.getElementById("epg-status");
+    const logoutBtn = document.getElementById("logout-btn");
     
-    const channelCountEl = document.getElementById('channel-count');
-    const programCountEl = document.getElementById('program-count');
-    const lastUpdatedEl = document.getElementById('last-updated');
-    const errorCountEl = document.getElementById('error-count');
+    const channelCountEl = document.getElementById("channel-count");
+    const programCountEl = document.getElementById("program-count");
+    const lastUpdatedEl = document.getElementById("last-updated");
+    const errorCountEl = document.getElementById("error-count");
     
-    const searchInput = document.getElementById('search-input');
-    const searchBtn = document.getElementById('search-btn');
-    const searchResults = document.getElementById('search-results');
+    const searchInput = document.getElementById("search-input");
+    const searchBtn = document.getElementById("search-btn");
+    const searchResults = document.getElementById("search-results");
 
     // Load EPG URLs on page load
     loadEPGUrls();
     loadStats();
 
     // Event listeners
-    saveUrlsBtn.addEventListener('click', saveEPGUrls);
-    clearUrlsBtn.addEventListener('click', clearEPGUrls);
-    refreshBtn.addEventListener('click', refreshEPG);
-    logoutBtn.addEventListener('click', logout);
-    searchBtn.addEventListener('click', performSearch);
+    saveUrlsBtn.addEventListener("click", saveEPGUrls);
+    clearUrlsBtn.addEventListener("click", clearEPGUrls);
+    refreshBtn.addEventListener("click", refreshEPG);
+    logoutBtn.addEventListener("click", logout);
+    searchBtn.addEventListener("click", performSearch);
 
     async function loadEPGUrls() {
       try {
-        const response = await fetch('/api/epg-list');
+        const response = await fetch("/api/epg-list", { credentials: "include" });
         if (response.ok) {
           const data = await response.json();
-          epgUrlsTextarea.value = data.urls.join('\n');
+          epgUrlsTextarea.value = data.urls.join("\n");
+        } else {
+          const errorData = await response.json();
+          showStatus(errorData.error || "Error loading EPG URLs", "error");
         }
       } catch (error) {
-        showStatus('Error loading EPG URLs', 'error');
+        showStatus("Network error while loading EPG URLs", "error");
       }
     }
 
     async function saveEPGUrls() {
       const urls = epgUrlsTextarea.value
-        .split('\n')
+        .split("\n")
         .map(url => url.trim())
         .filter(url => url.length > 0);
 
       try {
-        const response = await fetch('/api/epg-list', {
-          method: 'POST',
+        const response = await fetch("/api/epg-list", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ urls })
+          body: JSON.stringify({ urls }),
+          credentials: "include"
         });
 
         const data = await response.json();
         
         if (response.ok) {
-          showStatus(data.message, 'success');
+          showStatus(data.message, "success");
           loadStats();
         } else {
-          showStatus(data.error || 'Failed to save URLs', 'error');
+          showStatus(data.error || "Failed to save URLs", "error");
         }
       } catch (error) {
-        showStatus('Network error while saving URLs', 'error');
+        showStatus("Network error while saving URLs", "error");
       }
     }
 
     async function clearEPGUrls() {
-      if (confirm('Are you sure you want to clear all EPG URLs?')) {
+      if (confirm("Are you sure you want to clear all EPG URLs?")) {
         try {
-          const response = await fetch('/api/epg-list', {
-            method: 'DELETE'
+          const response = await fetch("/api/epg-list", {
+            method: "DELETE",
+            credentials: "include"
           });
 
           const data = await response.json();
           
           if (response.ok) {
-            epgUrlsTextarea.value = '';
-            showStatus(data.message, 'success');
+            epgUrlsTextarea.value = "";
+            showStatus(data.message, "success");
             loadStats();
           } else {
-            showStatus(data.error || 'Failed to clear URLs', 'error');
+            showStatus(data.error || "Failed to clear URLs", "error");
           }
         } catch (error) {
-          showStatus('Network error while clearing URLs', 'error');
+          showStatus("Network error while clearing URLs", "error");
         }
       }
     }
 
     async function refreshEPG() {
-      showStatus('Refreshing EPG data...', 'info');
+      showStatus("Refreshing EPG data...", "info");
       // This would trigger the worker to run immediately
       // For now, just reload stats
       await loadStats();
-      showStatus('EPG refresh completed', 'success');
+      showStatus("EPG refresh completed", "success");
     }
 
     async function loadStats() {
       try {
-        const response = await fetch('/api/stats');
+        const response = await fetch("/api/stats", { credentials: "include" });
         if (response.ok) {
           const data = await response.json();
           channelCountEl.textContent = data.channelCount || 0;
           programCountEl.textContent = data.programCount || 0;
-          lastUpdatedEl.textContent = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : '-';
+          lastUpdatedEl.textContent = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "-";
           errorCountEl.textContent = data.errors ? data.errors.length : 0;
+        } else {
+          const errorData = await response.json();
+          showStatus(errorData.error || "Error loading statistics", "error");
         }
       } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error("Network error while loading stats:", error);
+        showStatus("Network error while loading statistics", "error");
       }
     }
 
@@ -201,21 +209,25 @@ if (!session) {
       if (!query) return;
 
       try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { credentials: "include" });
         if (response.ok) {
           const data = await response.json();
           displaySearchResults(data.results);
+        } else {
+          const errorData = await response.json();
+          showStatus(errorData.error || "Error performing search", "error");
         }
       } catch (error) {
-        console.error('Error performing search:', error);
+        console.error("Network error while performing search:", error);
+        showStatus("Network error while performing search", "error");
       }
     }
 
     function displaySearchResults(results) {
-      searchResults.innerHTML = '';
+      searchResults.innerHTML = "";
       
       if (!results || results.length === 0) {
-        searchResults.innerHTML = '<p>No results found.</p>';
+        searchResults.innerHTML = "<p>No results found.</p>";
         return;
       }
 
@@ -223,37 +235,41 @@ if (!session) {
         <div class="search-result-item">
           <h4>${result.id}</h4>
           <p>${result.displayName}</p>
-          <button class="view-programs-btn" onclick="viewPrograms('${result.id}')">View Programs</button>
+          <button class="view-programs-btn" onclick="viewPrograms("${result.id}")">View Programs</button>
         </div>
-      `).join('');
+      `).join("");
 
       searchResults.innerHTML = resultsHtml;
     }
 
-    function showStatus(message, type = 'info') {
+    function showStatus(message, type = "info") {
       epgStatus.textContent = message;
       epgStatus.className = `status-message ${type}`;
     }
 
     async function logout() {
       try {
-        await fetch('/api/login', { method: 'DELETE' });
-        window.location.href = '/';
+        await fetch("/api/login", { method: "DELETE", credentials: "include" });
+        window.location.href = "/";
       } catch (error) {
-        console.error('Logout error:', error);
+        console.error("Logout error:", error);
       }
     }
 
     // Make viewPrograms function available globally
     window.viewPrograms = async function(channelId) {
       try {
-        const response = await fetch(`/api/channel-info?id=${encodeURIComponent(channelId)}`);
+        const response = await fetch(`/api/channel-info?id=${encodeURIComponent(channelId)}`, { credentials: "include" });
         if (response.ok) {
           const data = await response.json();
-          alert(`Channel: ${data.channel.displayName}\nCurrent Program: ${data.currentProgram?.title || 'None'}\nNext Hour: ${data.nextHourPrograms.length} programs`);
+          alert(`Channel: ${data.channel.displayName}\nCurrent Program: ${data.currentProgram?.title || "None"}\nNext Hour: ${data.nextHourPrograms.length} programs`);
+        } else {
+          const errorData = await response.json();
+          showStatus(errorData.error || "Error viewing programs", "error");
         }
       } catch (error) {
-        console.error('Error viewing programs:', error);
+        console.error("Network error while viewing programs:", error);
+        showStatus("Network error while viewing programs", "error");
       }
     };
   </script>
@@ -372,27 +388,12 @@ if (!session) {
       transition: all 0.2s;
     }
 
-    .primary-btn {
-      background-color: var(--primary-color);
-      color: white;
-    }
-
     .primary-btn:hover {
       background-color: #2563eb;
     }
 
-    .secondary-btn {
-      background-color: #f1f5f9;
-      color: var(--text-color);
-    }
-
     .secondary-btn:hover {
       background-color: #e2e8f0;
-    }
-
-    .refresh-btn {
-      background-color: var(--success-color);
-      color: white;
     }
 
     .refresh-btn:hover {
