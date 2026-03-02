@@ -23,10 +23,40 @@ const { error, redirect } = Astro.props;
         <input type="password" id="password" name="password" required />
       </div>
       
-      {error && <div class="error-message">{error}</div>}
+      <div id="error-message-container" class="error-message" style="display: none;"></div>
       
       <button type="submit" class="login-btn">Login</button>
     </form>
+
+    <script>
+      const form = document.querySelector('.login-form');
+      const errorContainer = document.querySelector('#error-message-container');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorContainer.style.display = 'none';
+
+        const formData = new FormData(form as HTMLFormElement);
+
+        try {
+          const response = await fetch('/api/login', {
+            method: 'POST',
+            body: new URLSearchParams(formData as any)
+          });
+
+          if (response.ok) {
+            window.location.href = '/dashboard';
+          } else {
+            const data = await response.json();
+            errorContainer.textContent = data.error || 'An unknown error occurred.';
+            errorContainer.style.display = 'block';
+          }
+        } catch (err) {
+            errorContainer.textContent = 'Failed to connect to the server.';
+            errorContainer.style.display = 'block';
+        }
+      });
+    </script>
   </div>
 </div>
 
