@@ -1,0 +1,22 @@
+# Cloudflare Pages configuration
+name = "epg-combine"
+compatibility_date = "2024-01-01"
+
+# Build settings
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Environment variables
+[env]
+  ADMIN_USERNAME = "admin"
+  ADMIN_PASSWORD = "password123"
+
+# Routes
+[[routes]]
+  pattern = "/*"
+  upstream = "epg-combine.pages.dev"
+
+# Functions
+[functions]
+  node_bundler = "esbuild"
