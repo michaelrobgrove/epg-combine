@@ -14,7 +14,7 @@
     "@astrojs/cloudflare": "^12.6.12",
     "@astrojs/react": "^4.0.0",
     "@astrojs/sitemap": "^3.5.0",
-    "@xmldom/xmldom": "^0.10.1",
+    "@xmldom/xmldom": "0.8.10",
     "astro": "^5.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
