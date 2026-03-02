@@ -1,13 +1,9 @@
+import type { APIContext } from 'astro';
 import { authManager } from '../../lib/auth';
 
-export async function POST({ request }: { request: Request }) {
+export async function POST(context: APIContext) {
   try {
-    // --- TEMPORARY DEBUGGING ---
-    console.log("ADMIN_USERNAME from env:", import.meta.env.ADMIN_USERNAME);
-    console.log("ADMIN_PASSWORD from env:", import.meta.env.ADMIN_PASSWORD ? "Set" : "Not Set");
-    // -------------------------
-
-    const formData = await request.formData();
+    const formData = await context.request.formData();
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
     
@@ -18,7 +14,7 @@ export async function POST({ request }: { request: Request }) {
       );
     }
 
-    const isValid = await authManager.verifyCredentials(username, password);
+    const isValid = await authManager.verifyCredentials(username, password, context.locals.runtime.env);
     
     if (!isValid) {
       return new Response(

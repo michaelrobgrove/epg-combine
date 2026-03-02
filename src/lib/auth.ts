@@ -17,10 +17,26 @@ class AuthManager {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  async verifyCredentials(username: string, password: string): Promise<boolean> {
-    const expectedUsername = import.meta.env.ADMIN_USERNAME;
+  async verifyCredentials(username: string, password: string, env: any): Promise<boolean> {
+    const expectedUsername = env.ADMIN_USERNAME;
+    const expectedPassword = env.ADMIN_PASSWORD;
+
+    if (!expectedUsername || !expectedPassword) {
+      console.error("ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set.");
+      return false;
+    }
+
+    // Since we now have the plain text password from the env,
+    // we don't need to hash it. We just compare the provided password with it.
+    // NOTE: This is less secure than comparing hashes if the stored password was a hash.
+    // However, Cloudflare secrets are encrypted at rest, so storing the plain password
+    // is the intended use case. Hashing it here would mean we're hashing an already-hashed value.
+    // For simplicity and directness with env secrets, we'll do a direct comparison.
+    // A better approach would be to store a hash in the secret and compare hashes.
+    // Let's stick to the hash comparison for better security.
+    
     const [expectedPasswordHash, passwordHash] = await Promise.all([
-      this.hashPassword(import.meta.env.ADMIN_PASSWORD),
+      this.hashPassword(expectedPassword),
       this.hashPassword(password)
     ]);
     
