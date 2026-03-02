@@ -1,57 +1,35 @@
-import { EPGParser } from '../../lib/epg-parser';
-import { PriorityMerger } from '../../lib/priority-merger';
-import { setCache } from '../../lib/epg-cache';
+import type { APIContext } from 'astro';
+import { refreshEPGCache } from '../../lib/epg-cache';
+import { EPGStore } from '../../lib/epg-store';
 
-export async function POST({ request }: { request: Request }) {
+export async function POST(context: APIContext) {
+  const kv = context.locals.runtime.env.EPG_KV;
+  if (!kv) {
+    return new Response(JSON.stringify({ error: 'KV not available' }), { status: 500 });
+  }
+
   try {
-    const { urls } = await request.json() as { urls: string[] };
+    // No need to get URLs from request, refreshEPGCache will fetch from EPGStore
+    const refreshedCache = await refreshEPGCache(kv, true); // Force refresh
 
-    if (!Array.isArray(urls) || urls.length === 0) {
+    if (!refreshedCache) {
       return new Response(
-        JSON.stringify({ error: 'No URLs provided' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Failed to refresh EPG cache' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    const parser = new EPGParser();
-    const merger = new PriorityMerger();
-    merger.setSourcePriorities(urls);
-
-    const fetchErrors: string[] = [];
-    const epgDataList = [];
-
-    // Fetch and parse all EPG sources (in parallel for speed)
-    const results = await Promise.allSettled(urls.map(url => parser.parseEPG(url)));
-
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      if (result.status === 'fulfilled') {
-        epgDataList.push(result.value);
-      } else {
-        fetchErrors.push(`${urls[i]}: ${result.reason?.message ?? 'unknown error'}`);
-      }
-    }
-
-    const merged = merger.mergeEPGData(epgDataList);
-    const now = Date.now();
-
-    setCache({
-      channels: merged.channels,
-      programs: merged.programs,
-      channelCount: merged.channelCount,
-      programCount: merged.programCount,
-      errors: [...fetchErrors, ...merged.errors],
-      lastUpdated: now,
-      urls,
-    });
+    const store = new EPGStore(kv);
+    const sources = await store.getAllSources();
+    const errors = sources.map(s => s.lastError).filter(Boolean) as string[];
 
     return new Response(
       JSON.stringify({
         success: true,
-        channelCount: merged.channelCount,
-        programCount: merged.programCount,
-        errors: [...fetchErrors, ...merged.errors],
-        lastUpdated: now,
+        channelCount: refreshedCache.channels.length,
+        programCount: refreshedCache.programs.length,
+        errors: errors,
+        lastUpdated: refreshedCache.lastUpdated.getTime(),
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );

@@ -29,3 +29,8 @@ crons = ["0 * * * *"] # Runs every hour
 # Functions
 [functions]
   node_bundler = "esbuild"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "EPG_KV"
+id = "99eaae3d0dc845a19ee6bec9a6c68fc9"

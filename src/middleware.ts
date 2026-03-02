@@ -15,6 +15,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const url = context.url;
   const env = context.locals.runtime?.env ?? {};
   const secret = getSessionSecret(env);
+  // EPG_KV binding is expected to be available directly on context.locals.runtime.env
+  // if configured in cloudflare.toml and handled by the Astro Cloudflare adapter.
 
   // Protect API routes
   if (protectedApiRoutes.some(route => url.pathname.startsWith(route))) {
