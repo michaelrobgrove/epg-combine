@@ -169,11 +169,49 @@ const session = Astro.locals.session!;
     }
 
     async function refreshEPG() {
-      showStatus("Refreshing EPG data...", "info");
-      // This would trigger the worker to run immediately
-      // For now, just reload stats
-      await loadStats();
-      showStatus("EPG refresh completed", "success");
+      const urls = epgUrlsTextarea.value
+        .split("\n")
+        .map(url => url.trim())
+        .filter(url => url.length > 0);
+
+      if (urls.length === 0) {
+        showStatus("No URLs to refresh. Add EPG URLs first.", "error");
+        return;
+      }
+
+      showStatus(`Fetching EPG data from ${urls.length} source(s)… this may take a moment.`, "info");
+
+      try {
+        const response = await fetch("/api/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls }),
+          credentials: "include",
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          channelCountEl.textContent = data.channelCount ?? 0;
+          programCountEl.textContent = data.programCount ?? 0;
+          lastUpdatedEl.textContent = data.lastUpdated
+            ? new Date(data.lastUpdated).toLocaleString()
+            : "-";
+          errorCountEl.textContent = data.errors ? data.errors.length : 0;
+
+          const errMsg = data.errors && data.errors.length > 0
+            ? ` (${data.errors.length} error(s))`
+            : "";
+          showStatus(
+            `EPG refresh completed: ${data.channelCount} channels, ${data.programCount} programs loaded.${errMsg}`,
+            data.errors && data.errors.length > 0 ? "info" : "success"
+          );
+        } else {
+          showStatus(data.error || "Refresh failed", "error");
+        }
+      } catch (error) {
+        showStatus("Network error during refresh", "error");
+      }
     }
 
     async function loadStats() {
@@ -181,9 +219,13 @@ const session = Astro.locals.session!;
         const response = await fetch("/api/stats", { credentials: "include" });
         if (response.ok) {
           const data = await response.json();
-          channelCountEl.textContent = data.channelCount || 0;
-          programCountEl.textContent = data.programCount || 0;
-          lastUpdatedEl.textContent = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "-";
+          channelCountEl.textContent = data.channelCount ?? 0;
+          programCountEl.textContent = data.programCount ?? 0;
+          // Guard against null / epoch (0) timestamps
+          lastUpdatedEl.textContent =
+            data.lastUpdated && data.lastUpdated > 0
+              ? new Date(data.lastUpdated).toLocaleString()
+              : "-";
           errorCountEl.textContent = data.errors ? data.errors.length : 0;
         } else {
           const errorData = await response.json();

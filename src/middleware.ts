@@ -4,6 +4,7 @@ import { verifyToken, getSessionSecret, SESSION_COOKIE } from './lib/auth';
 const protectedApiRoutes = [
   '/api/epg-list',
   '/api/stats',
+  '/api/refresh',
   '/api/channel-info',
   '/api/channel-mappings',
   '/api/logs',
